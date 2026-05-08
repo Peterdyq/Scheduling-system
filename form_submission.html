@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>课程添加页面</title>
+</head>
+
+<body>
+    <h1>
+        课程添加：
+    </h1>
+
+
+    <label for="coursename">
+        课程名称：
+    </label>
+    <input type="text" id="coursename">
+    <label for="coursenum">
+        课程编号：
+    </label>
+    <input type="text" id="coursenum">
+    <label for="day">
+        周几：
+    </label>
+    <input type="number" id="day">
+    <label for="starttime">
+        开始时间：
+    </label>
+    <input type="text" id="starttime">
+    <label for="endtime">
+        结束时间
+    </label>
+    <input type="text" id="endtime">
+
+
+
+    <hr>
+    <h2>已添加课程列表：</h2>
+    <div id="courseListDisplay">
+        <p>暂无课程</p>
+    </div>
+    <hr>
+
+    <button id="addBtn" type="button">add</button>
+
+
+    <button id="submitBtn" type="button">submit</button>
+
+    <hr>
+    <h3>排课系统反馈：</h3>
+    <pre id="outputContent" style="background: #f4f4f4; padding: 10px; border: 1px solid #ccc;">
+        等待提交数据...
+    </pre>
+    <script src="addcourse.js"></script>
+    <script src="datatransmit.js"></script>
+    <script>
+        // 确保 addcourse.js 里的 clickevent 正常
+        document.getElementById('addBtn').onclick = clickevent;
+
+        // 确保 datatransmit.js 里的 uploadData 正常
+        document.getElementById('submitBtn').onclick = function (e) {
+            uploadData(e); // 统一通过 onclick 触发，简单且拦截最快
+        };
+    </script>
+</body>
+
+</html>
