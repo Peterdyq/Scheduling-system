@@ -1,68 +1,78 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>课程添加页面</title>
+    <title>&#35838;&#31243;&#28155;&#21152;&#39029;&#38754;</title>
+    <link rel="stylesheet" href="style.css">
 </head>
 
 <body>
-    <h1>
-        课程添加：
-    </h1>
+    <main>
+        <section class="section">
+            <h1>&#35838;&#31243;&#28155;&#21152;</h1>
+            <div class="form-grid">
+                <div class="field">
+                    <label for="coursename">&#35838;&#31243;&#21517;&#31216;</label>
+                    <input type="text" id="coursename">
+                </div>
 
+                <div class="field">
+                    <label for="coursenum">&#35838;&#31243;&#32534;&#21495;</label>
+                    <input type="text" id="coursenum">
+                </div>
 
-    <label for="coursename">
-        课程名称：
-    </label>
-    <input type="text" id="coursename">
-    <label for="coursenum">
-        课程编号：
-    </label>
-    <input type="text" id="coursenum">
-    <label for="day">
-        周几：
-    </label>
-    <input type="number" id="day">
-    <label for="starttime">
-        开始时间：
-    </label>
-    <input type="text" id="starttime">
-    <label for="endtime">
-        结束时间
-    </label>
-    <input type="text" id="endtime">
+                <div class="field">
+                    <label for="day">&#21608;&#20960;</label>
+                    <input type="number" id="day" min="1" max="7">
+                </div>
 
+                <div class="field">
+                    <label for="starttime">&#24320;&#22987;&#26102;&#38388;</label>
+                    <input type="text" id="starttime" placeholder="08:00">
+                </div>
 
+                <div class="field">
+                    <label for="endtime">&#32467;&#26463;&#26102;&#38388;</label>
+                    <input type="text" id="endtime" placeholder="09:30">
+                </div>
+            </div>
+            <p id="formError" class="error-text"></p>
+            <p id="storageNotice" class="notice"></p>
 
-    <hr>
-    <h2>已添加课程列表：</h2>
-    <div id="courseListDisplay">
-        <p>暂无课程</p>
-    </div>
-    <hr>
+            <div class="button-row">
+                <button id="addBtn" class="primary-button" type="button">add</button>
+                <button id="submitBtn" type="button">submit</button>
+                <button id="clearCoursesBtn" type="button">clear courses</button>
+            </div>
+        </section>
 
-    <button id="addBtn" type="button">add</button>
+        <section class="section">
+            <h2>&#24050;&#28155;&#21152;&#35838;&#31243;&#21015;&#34920;</h2>
+            <div id="courseListDisplay">
+                <p>&#26242;&#26080;&#35838;&#31243;</p>
+            </div>
+        </section>
 
+        <section class="section">
+            <h3>&#25490;&#35838;&#31995;&#32479;&#21453;&#39304;</h3>
+            <div id="outputContent" class="output-box">&#31561;&#24453;&#25552;&#20132;&#25968;&#25454;...</div>
+            <div class="button-row">
+                <button id="clearOutputBtn" type="button">clear output</button>
+            </div>
+        </section>
+    </main>
 
-    <button id="submitBtn" type="button">submit</button>
-
-    <hr>
-    <h3>排课系统反馈：</h3>
-    <pre id="outputContent" style="background: #f4f4f4; padding: 10px; border: 1px solid #ccc;">
-        等待提交数据...
-    </pre>
     <script src="addcourse.js"></script>
     <script src="datatransmit.js"></script>
     <script>
-        // 确保 addcourse.js 里的 clickevent 正常
         document.getElementById('addBtn').onclick = clickevent;
-
-        // 确保 datatransmit.js 里的 uploadData 正常
         document.getElementById('submitBtn').onclick = function (e) {
-            uploadData(e); // 统一通过 onclick 触发，简单且拦截最快
+            uploadData(e);
         };
+        document.getElementById('clearCoursesBtn').onclick = clearCourseList;
+        document.getElementById('clearOutputBtn').onclick = clearOutput;
     </script>
 </body>
 
