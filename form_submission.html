@@ -49,6 +49,28 @@
         </section>
 
         <section class="section">
+            <h2>&#35838;&#31243;&#34920;&#26041;&#26696;</h2>
+            <div class="plan-grid">
+                <div class="field">
+                    <label for="planName">&#26041;&#26696;&#21517;&#31216;</label>
+                    <input type="text" id="planName" placeholder="2026 Spring">
+                </div>
+                <div class="field">
+                    <label for="planSelect">&#24050;&#20445;&#23384;&#26041;&#26696;</label>
+                    <select id="planSelect"></select>
+                </div>
+            </div>
+            <p id="planStatus" class="notice"></p>
+            <div class="button-row">
+                <button id="savePlanBtn" class="primary-button" type="button">save plan</button>
+                <button id="refreshPlansBtn" type="button">refresh plans</button>
+                <button id="loadPlanBtn" type="button">load selected</button>
+                <button id="runPlanBtn" type="button">run selected</button>
+                <button id="deletePlanBtn" type="button">delete selected</button>
+            </div>
+        </section>
+
+        <section class="section">
             <h2>&#24050;&#28155;&#21152;&#35838;&#31243;&#21015;&#34920;</h2>
             <div id="courseListDisplay">
                 <p>&#26242;&#26080;&#35838;&#31243;</p>
@@ -73,6 +95,11 @@
         };
         document.getElementById('clearCoursesBtn').onclick = clearCourseList;
         document.getElementById('clearOutputBtn').onclick = clearOutput;
+        document.getElementById('savePlanBtn').onclick = saveCurrentPlan;
+        document.getElementById('refreshPlansBtn').onclick = loadPlanList;
+        document.getElementById('loadPlanBtn').onclick = loadSelectedPlan;
+        document.getElementById('runPlanBtn').onclick = runSelectedPlan;
+        document.getElementById('deletePlanBtn').onclick = deleteSelectedPlan;
     </script>
 </body>
 

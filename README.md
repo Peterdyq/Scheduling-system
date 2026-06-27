@@ -6,10 +6,29 @@ A small course-scheduling demo that combines a Flask backend, a browser UI, and 
 
 - Python 3
 - Flask
+- PostgreSQL
 - A C++ compiler such as `g++`
 - Windows can use the committed `output/schedule.exe` directly
 
 ## Run
+
+Install Python dependencies:
+
+```powershell
+venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Create a `.env` file from `.env.example` and set your PostgreSQL connection string:
+
+```text
+DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:5432/scheduling_system
+```
+
+Create the PostgreSQL database if it does not exist, then initialize tables:
+
+```powershell
+venv\Scripts\python.exe init_db.py
+```
 
 Start the Flask server from the project root:
 
@@ -74,3 +93,24 @@ The browser renders `courses` as a schedule table and `conflicts` as conflict de
 ## Local Browser Cache
 
 The page stores the current course list and last scheduling result in `localStorage`, so accidental refreshes do not lose data. Use `clear courses` and `clear output` to clear saved browser data.
+
+## PostgreSQL Storage
+
+The first database-backed phase stores reusable course-table plans in PostgreSQL.
+
+Tables:
+
+- `schedule_plans`: saved course-table plans
+- `courses`: courses belonging to a plan
+
+API:
+
+- `GET /api/db/status`: check database connectivity
+- `POST /api/plans`: save a plan with courses
+- `GET /api/plans`: list saved plans
+- `GET /api/plans/<id>`: load one saved plan
+- `PUT /api/plans/<id>`: update a plan
+- `DELETE /api/plans/<id>`: delete a plan
+- `POST /api/plans/<id>/run`: run scheduling for a saved plan
+
+The existing `POST /api/make_schedule` endpoint remains available for one-off scheduling from the current browser course list.

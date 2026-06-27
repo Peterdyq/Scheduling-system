@@ -132,6 +132,157 @@ function renderScheduleResult(schedule) {
     return html;
 }
 
+function setPlanStatus(message, isError = false) {
+    const status = document.getElementById('planStatus');
+    if (!status) {
+        return;
+    }
+    status.innerText = message;
+    status.style.color = isError ? '#b42318' : '#5a6270';
+}
+
+function getSelectedPlanId() {
+    const select = document.getElementById('planSelect');
+    return select && select.value ? Number(select.value) : null;
+}
+
+async function requestJson(url, options = {}) {
+    const response = await fetch(API_BASE_URL + url, {
+        ...options,
+        headers: {
+            'Content-Type': 'application/json',
+            ...(options.headers || {}),
+        },
+    });
+
+    const rawText = await response.text();
+    let result;
+    try {
+        result = JSON.parse(rawText);
+    } catch (error) {
+        throw new Error('\u670d\u52a1\u5668\u8fd4\u56de\u7684\u4e0d\u662f JSON');
+    }
+
+    if (!response.ok) {
+        throw new Error(result.message || rawText);
+    }
+
+    return result;
+}
+
+async function loadPlanList() {
+    const select = document.getElementById('planSelect');
+    if (!select) {
+        return;
+    }
+
+    try {
+        const result = await requestJson('/api/plans');
+        select.innerHTML = '';
+
+        if (result.plans.length === 0) {
+            select.innerHTML = '<option value="">\u6682\u65e0\u5df2\u4fdd\u5b58\u65b9\u6848</option>';
+            setPlanStatus('\u6570\u636e\u5e93\u5df2\u8fde\u63a5\uff0c\u5c1a\u672a\u4fdd\u5b58\u65b9\u6848\u3002');
+            return;
+        }
+
+        result.plans.forEach((plan) => {
+            const option = document.createElement('option');
+            option.value = plan.id;
+            option.innerText = `${plan.name} (${plan.course_count})`;
+            select.appendChild(option);
+        });
+        setPlanStatus('\u5df2\u52a0\u8f7d\u5df2\u4fdd\u5b58\u65b9\u6848\u3002');
+    } catch (error) {
+        setPlanStatus('\u65e0\u6cd5\u52a0\u8f7d\u65b9\u6848\uff1a' + error.message, true);
+    }
+}
+
+async function saveCurrentPlan() {
+    const planName = document.getElementById('planName').value.trim();
+    if (!planName) {
+        setPlanStatus('\u8bf7\u5148\u586b\u5199\u65b9\u6848\u540d\u79f0\u3002', true);
+        return;
+    }
+
+    try {
+        const result = await requestJson('/api/plans', {
+            method: 'POST',
+            body: JSON.stringify({
+                name: planName,
+                description: '',
+                courses: datalist,
+            }),
+        });
+        setPlanStatus('\u5df2\u4fdd\u5b58\u65b9\u6848\uff1a' + result.plan.name);
+        await loadPlanList();
+        document.getElementById('planSelect').value = result.plan.id;
+    } catch (error) {
+        setPlanStatus('\u4fdd\u5b58\u5931\u8d25\uff1a' + error.message, true);
+    }
+}
+
+async function loadSelectedPlan() {
+    const planId = getSelectedPlanId();
+    if (!planId) {
+        setPlanStatus('\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u65b9\u6848\u3002', true);
+        return;
+    }
+
+    try {
+        const result = await requestJson(`/api/plans/${planId}`);
+        datalist = result.plan.courses.map((course) => ({
+            name: course.name,
+            num: course.num,
+            day: course.day,
+            starttime: course.starttime,
+            endtime: course.endtime,
+        }));
+        document.getElementById('planName').value = result.plan.name;
+        saveCourseList();
+        renderCourseList();
+        setPlanStatus('\u5df2\u52a0\u8f7d\u65b9\u6848\uff1a' + result.plan.name);
+    } catch (error) {
+        setPlanStatus('\u52a0\u8f7d\u5931\u8d25\uff1a' + error.message, true);
+    }
+}
+
+async function deleteSelectedPlan() {
+    const planId = getSelectedPlanId();
+    if (!planId) {
+        setPlanStatus('\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u65b9\u6848\u3002', true);
+        return;
+    }
+
+    try {
+        await requestJson(`/api/plans/${planId}`, { method: 'DELETE' });
+        setPlanStatus('\u5df2\u5220\u9664\u65b9\u6848\u3002');
+        await loadPlanList();
+    } catch (error) {
+        setPlanStatus('\u5220\u9664\u5931\u8d25\uff1a' + error.message, true);
+    }
+}
+
+async function runSelectedPlan() {
+    const planId = getSelectedPlanId();
+    const outputBox = document.getElementById('outputContent');
+    if (!planId) {
+        setPlanStatus('\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u65b9\u6848\u3002', true);
+        return;
+    }
+
+    try {
+        outputBox.innerText = '\u6b63\u5728\u6392\u8bfe\uff0c\u8bf7\u7a0d\u540e...';
+        outputBox.style.color = 'blue';
+        const result = await requestJson(`/api/plans/${planId}/run`, { method: 'POST' });
+        setOutputHtml(outputBox, renderScheduleResult(result.schedule || {}), 'black');
+        setPlanStatus('\u5df2\u5bf9\u9009\u4e2d\u65b9\u6848\u6392\u8bfe\u3002');
+    } catch (error) {
+        setOutputText(outputBox, '\u670d\u52a1\u5668\u9519\u8bef\uff1a' + error.message, 'red');
+        setPlanStatus('\u6392\u8bfe\u5931\u8d25\uff1a' + error.message, true);
+    }
+}
+
 async function uploadData(event) {
     if (event && typeof event.preventDefault === 'function') {
         event.preventDefault();
@@ -188,3 +339,4 @@ async function uploadData(event) {
 }
 
 restoreOutput();
+loadPlanList();

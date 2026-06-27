@@ -1,9 +1,20 @@
 from flask import Flask, jsonify, request, send_from_directory
+from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 import json
 import os
 import re
 import subprocess
 import tempfile
+
+from db import (
+    Course,
+    SchedulePlan,
+    get_session,
+    is_database_configured,
+    plan_to_detail,
+    plan_to_summary,
+)
 
 app = Flask(__name__)
 
@@ -15,7 +26,7 @@ REQUIRED_COURSE_FIELDS = ("name", "num", "day", "starttime", "endtime")
 def add_cors_headers(response):
     response.headers["Access-Control-Allow-Origin"] = "*"
     response.headers["Access-Control-Allow-Headers"] = "Content-Type"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Methods"] = "GET, POST, PUT, DELETE, OPTIONS"
     return response
 
 
@@ -62,14 +73,14 @@ def parse_time_to_minutes(value):
     return hours * 60 + minutes
 
 
-def validate_courses(data):
+def validate_courses(data, allow_empty=False):
     if data is None:
         return None, "请求体必须是合法的 JSON"
 
     if not isinstance(data, list):
         return None, "请求体最外层必须是课程数组"
 
-    if len(data) == 0:
+    if not allow_empty and len(data) == 0:
         return None, "课程列表不能为空"
 
     validated_courses = []
@@ -127,13 +138,37 @@ def validate_courses(data):
     return validated_courses, None
 
 
-@app.route("/api/make_schedule", methods=["POST"])
-def make_schedule():
-    incoming_data = request.get_json(silent=True)
-    validated_courses, validation_error = validate_courses(incoming_data)
-    if validation_error:
-        return jsonify({"status": "error", "message": validation_error}), 400
+def validate_plan_payload(payload, require_name=False):
+    if payload is None or not isinstance(payload, dict):
+        return None, "请求体必须是对象"
 
+    name = payload.get("name", "")
+    if require_name and (not isinstance(name, str) or not name.strip()):
+        return None, "方案名称不能为空"
+    if name and (not isinstance(name, str) or len(name.strip()) > 120):
+        return None, "方案名称必须是 120 个字符以内的字符串"
+
+    description = payload.get("description", "")
+    if description is None:
+        description = ""
+    if not isinstance(description, str):
+        return None, "方案说明必须是字符串"
+
+    courses = payload.get("courses")
+    validated_courses = None
+    if courses is not None:
+        validated_courses, error = validate_courses(courses, allow_empty=True)
+        if error:
+            return None, error
+
+    return {
+        "name": name.strip() if isinstance(name, str) else "",
+        "description": description.strip(),
+        "courses": validated_courses,
+    }, None
+
+
+def run_scheduler(validated_courses):
     processed_payload = {
         "config": {
             "version": "2.0",
@@ -157,11 +192,11 @@ def make_schedule():
 
         cpp_executable = get_cpp_executable()
         if not os.path.exists(cpp_executable):
-            return jsonify({
+            return None, ({
                 "status": "error",
                 "message": "找不到 C++ 可执行文件",
                 "compile_command": get_compile_command(),
-            }), 500
+            }, 500)
 
         result = subprocess.run(
             [cpp_executable, input_filename],
@@ -171,35 +206,200 @@ def make_schedule():
         )
 
         if result.returncode != 0:
-            return jsonify({
+            return None, ({
                 "status": "error",
                 "message": "C++ 程序执行失败",
                 "cpp_stdout": result.stdout,
                 "cpp_stderr": result.stderr,
                 "returncode": result.returncode,
-            }), 500
+            }, 500)
 
         try:
-            schedule_result = json.loads(result.stdout)
+            return json.loads(result.stdout), None
         except json.JSONDecodeError:
-            return jsonify({
+            return None, ({
                 "status": "error",
                 "message": "C++ 程序返回的不是合法 JSON",
                 "cpp_stdout": result.stdout,
-            }), 500
-
-        return jsonify({
-            "status": "success",
-            "message": "排课完成",
-            "schedule": schedule_result,
-        })
-
-    except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+            }, 500)
 
     finally:
         if input_filename and os.path.exists(input_filename):
             os.remove(input_filename)
+
+
+def database_error_response(error):
+    return jsonify({
+        "status": "error",
+        "message": "数据库操作失败",
+        "detail": str(error),
+    }), 500
+
+
+@app.route("/api/db/status", methods=["GET"])
+def db_status():
+    if not is_database_configured():
+        return jsonify({
+            "status": "not_configured",
+            "message": "DATABASE_URL 未配置",
+        }), 503
+
+    try:
+        with get_session() as session:
+            session.execute(select(SchedulePlan.id).limit(1))
+        return jsonify({"status": "ok"})
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans", methods=["GET"])
+def list_plans():
+    try:
+        with get_session() as session:
+            plans = session.scalars(select(SchedulePlan).order_by(SchedulePlan.updated_at.desc())).all()
+            return jsonify({"status": "success", "plans": [plan_to_summary(plan) for plan in plans]})
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans", methods=["POST"])
+def create_plan():
+    payload = request.get_json(silent=True)
+    data, error = validate_plan_payload(payload, require_name=True)
+    if error:
+        return jsonify({"status": "error", "message": error}), 400
+
+    try:
+        with get_session() as session:
+            plan = SchedulePlan(name=data["name"], description=data["description"])
+            for course in data["courses"] or []:
+                plan.courses.append(Course(**course))
+            session.add(plan)
+            session.commit()
+            return jsonify({"status": "success", "plan": plan_to_detail(plan)}), 201
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans/<int:plan_id>", methods=["GET"])
+def get_plan(plan_id):
+    try:
+        with get_session() as session:
+            plan = session.get(SchedulePlan, plan_id)
+            if not plan:
+                return jsonify({"status": "error", "message": "找不到课程表方案"}), 404
+            return jsonify({"status": "success", "plan": plan_to_detail(plan)})
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans/<int:plan_id>", methods=["PUT"])
+def update_plan(plan_id):
+    payload = request.get_json(silent=True)
+    data, error = validate_plan_payload(payload, require_name=False)
+    if error:
+        return jsonify({"status": "error", "message": error}), 400
+
+    try:
+        with get_session() as session:
+            plan = session.get(SchedulePlan, plan_id)
+            if not plan:
+                return jsonify({"status": "error", "message": "找不到课程表方案"}), 404
+
+            if data["name"]:
+                plan.name = data["name"]
+            plan.description = data["description"]
+
+            if data["courses"] is not None:
+                plan.courses.clear()
+                for course in data["courses"]:
+                    plan.courses.append(Course(**course))
+
+            session.commit()
+            return jsonify({"status": "success", "plan": plan_to_detail(plan)})
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans/<int:plan_id>", methods=["DELETE"])
+def delete_plan(plan_id):
+    try:
+        with get_session() as session:
+            plan = session.get(SchedulePlan, plan_id)
+            if not plan:
+                return jsonify({"status": "error", "message": "找不到课程表方案"}), 404
+            session.delete(plan)
+            session.commit()
+            return jsonify({"status": "success"})
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+
+@app.route("/api/plans/<int:plan_id>/run", methods=["POST"])
+def run_plan(plan_id):
+    try:
+        with get_session() as session:
+            plan = session.get(SchedulePlan, plan_id)
+            if not plan:
+                return jsonify({"status": "error", "message": "找不到课程表方案"}), 404
+
+            courses = [
+                {
+                    "name": course.name,
+                    "num": course.num,
+                    "day": course.day,
+                    "starttime": course.starttime,
+                    "endtime": course.endtime,
+                }
+                for course in plan.courses
+            ]
+    except RuntimeError as error:
+        return jsonify({"status": "error", "message": str(error)}), 503
+    except SQLAlchemyError as error:
+        return database_error_response(error)
+
+    if not courses:
+        return jsonify({"status": "error", "message": "课程列表不能为空"}), 400
+
+    schedule_result, run_error = run_scheduler(courses)
+    if run_error:
+        body, status_code = run_error
+        return jsonify(body), status_code
+
+    return jsonify({
+        "status": "success",
+        "message": "排课完成",
+        "schedule": schedule_result,
+    })
+
+
+@app.route("/api/make_schedule", methods=["POST"])
+def make_schedule():
+    incoming_data = request.get_json(silent=True)
+    validated_courses, validation_error = validate_courses(incoming_data)
+    if validation_error:
+        return jsonify({"status": "error", "message": validation_error}), 400
+
+    schedule_result, run_error = run_scheduler(validated_courses)
+    if run_error:
+        body, status_code = run_error
+        return jsonify(body), status_code
+
+    return jsonify({
+        "status": "success",
+        "message": "排课完成",
+        "schedule": schedule_result,
+    })
 
 
 if __name__ == "__main__":
