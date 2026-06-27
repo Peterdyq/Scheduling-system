@@ -1,13 +1,18 @@
-import flask
-
 from flask import Flask, request, jsonify
-from flask_cors import CORS
-import json        # 用于处理 JSON 文件的读写
-import subprocess  # 用于在后台运行你的 C++ .exe 程序
-import os          # 用于检查文件是否存在
+import json
+import os
+import subprocess
+import tempfile
 
 app = Flask(__name__)
-CORS(app)
+
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "Content-Type"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    return response
 
 # 定义一个路由，专门用来接收前端传来的排课数据
 # methods=['POST'] 表示这个接口只接受“提交数据”的操作
@@ -32,9 +37,9 @@ def make_schedule():
         "course_list": incoming_data  # 网页传来的核心课程数据放在这里
     }
 
-    # --- 3. 存为本地文件 ---
-    # 定义一个临时文件名，作为 Python 和 C++ 沟通的“桥梁”
-    input_filename = 'data_to_cpp.json'
+    # --- 3. 存为临时文件 ---
+    # 不写入项目目录，避免 VS Code Live Server 检测到文件变化后自动刷新页面。
+    input_filename = os.path.join(tempfile.gettempdir(), 'scheduling_system_data_to_cpp.json')
     
     try:
         # 使用 utf-8 编码写入，确保课程名中的中文不会乱码
@@ -76,4 +81,4 @@ def make_schedule():
 
 if __name__ == '__main__':
     # 启动 Flask 服务
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5000, use_reloader=False)

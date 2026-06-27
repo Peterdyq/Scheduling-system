@@ -1,6 +1,21 @@
 
 const courseform = document.querySelector("#courseform")
-let datalist = [];
+const COURSE_LIST_STORAGE_KEY = 'scheduling_system_course_list';
+let datalist = loadCourseList();
+
+function loadCourseList() {
+    try {
+        const savedCourses = localStorage.getItem(COURSE_LIST_STORAGE_KEY);
+        return savedCourses ? JSON.parse(savedCourses) : [];
+    } catch (error) {
+        console.warn('读取已保存课程失败：', error);
+        return [];
+    }
+}
+
+function saveCourseList() {
+    localStorage.setItem(COURSE_LIST_STORAGE_KEY, JSON.stringify(datalist));
+}
 
 function clickevent() {
 
@@ -17,6 +32,7 @@ function clickevent() {
         "endtime": endtime
     };
     datalist.push(newcourse);
+    saveCourseList();
     alert('已添加课程');
     renderCourseList();
 }
@@ -56,3 +72,4 @@ function renderCourseList() {
     displayArea.innerHTML = html;
 }
 
+renderCourseList();
